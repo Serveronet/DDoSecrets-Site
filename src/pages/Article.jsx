@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { marked } from 'marked'
 import Layout from '../components/Layout.jsx'
 import Promo from '../components/Promo.jsx'
 import ArticleCard from '../components/ArticleCard.jsx'
+import ErrorNotice from '../components/ErrorNotice.jsx'
+import { SkeletonArticlePage, SkeletonRelatedRow, InlineStatus } from '../components/Skeleton.jsx'
 import { useSiteQuery } from '../hooks/useSiteQuery.js'
 import { querySiteDb } from '../api/siteApi.js'
 import { bytesToReadable, formatDateOnly, parseJsonField } from '../lib/format.js'
@@ -16,7 +18,7 @@ function MetadataLinks({ label, names, hrefFor }) {
       {names.map((name, i) => (
         <span key={name}>
           {i > 0 ? ', ' : '\n              '}
-          <a href={hrefFor(name)}>{name}</a>
+          <Link to={hrefFor(name)}>{name}</Link>
         </span>
       ))}
     </p>
@@ -37,7 +39,7 @@ function LinkRow({ label, href, children }) {
 export default function Article() {
   const { slug } = useParams()
   const decoded = decodeURIComponent(slug)
-  const { rows, loading, error } = useSiteQuery({
+  const { rows, loading, error, retry } = useSiteQuery({
     table: 'articles',
     where: [['slug', '=', decoded]],
     limit: 1,
@@ -51,13 +53,22 @@ export default function Article() {
     }
   }, [article])
 
-  if (loading) return <Layout />
+  if (loading)
+    return (
+      <Layout>
+        <SkeletonArticlePage />
+      </Layout>
+    )
   if (error)
     return (
       <Layout>
         <div className="content">
-          <h2>Error</h2>
-          <p>{String(error.message || error)}</p>
+          <ErrorNotice error={error} onRetry={retry} title="Could not load this article" />
+          <p className="meta">
+            <Link to="/" className="drill-in">
+              Back to the front page
+            </Link>
+          </p>
         </div>
       </Layout>
     )
@@ -150,7 +161,10 @@ export default function Article() {
 function RelatedArticles({ slug, categories, countries }) {
   const containerRef = useRef(null)
   const startedRef = useRef(false)
+  const abortRef = useRef(null)
   const [groups, setGroups] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     const el = containerRef.current
@@ -165,29 +179,46 @@ function RelatedArticles({ slug, categories, countries }) {
       { rootMargin: '400px' }
     )
     observer.observe(el)
-    return () => observer.disconnect()
+    return () => {
+      observer.disconnect()
+      if (abortRef.current) abortRef.current.abort()
+    }
   }, [])
 
   async function loadRelated() {
-    const terms = [
-      ...categories.map((t) => ({ kind: 'type', term: t })),
-      ...countries.map((t) => ({ kind: 'country', term: t })),
-    ]
-    const settled = await Promise.all(
-      terms.map(({ kind, term }) =>
-        querySiteDb({
-          table: 'article_terms',
-          where: [
-            ['kind', '=', kind],
-            ['term', '=', term],
-            ['slug', '!=', slug],
-          ],
-          orderBy: ['published_at', 'desc'],
-          limit: 3,
-        }).then(({ rows }) => ({ kind, term, rows }))
+    const controller = new AbortController()
+    abortRef.current = controller
+    setLoading(true)
+    setError(null)
+    try {
+      const terms = [
+        ...categories.map((t) => ({ kind: 'type', term: t })),
+        ...countries.map((t) => ({ kind: 'country', term: t })),
+      ]
+      const settled = await Promise.all(
+        terms.map(({ kind, term }) =>
+          querySiteDb(
+            {
+              table: 'article_terms',
+              where: [
+                ['kind', '=', kind],
+                ['term', '=', term],
+                ['slug', '!=', slug],
+              ],
+              orderBy: ['published_at', 'desc'],
+              limit: 3,
+            },
+            { signal: controller.signal }
+          ).then(({ rows }) => ({ kind, term, rows }))
+        )
       )
-    )
-    setGroups(settled.filter((g) => g.rows.length > 0))
+      setGroups(settled.filter((g) => g.rows.length > 0))
+    } catch (e) {
+      if (controller.signal.aborted || (e && e.name === 'AbortError')) return
+      setError(e)
+    } finally {
+      if (!controller.signal.aborted) setLoading(false)
+    }
   }
 
   const hrefFor = (kind, term) =>
@@ -195,15 +226,25 @@ function RelatedArticles({ slug, categories, countries }) {
 
   return (
     <div className="related-articles-group content" ref={containerRef}>
-      {groups === null ? (
+      {groups === null && loading && (
+        <>
+          <InlineStatus label="Loading related articles…" />
+          <SkeletonRelatedRow groups={2} />
+        </>
+      )}
+      {groups === null && !loading && error && (
+        <ErrorNotice error={error} onRetry={loadRelated} title="Could not load related articles" />
+      )}
+      {groups === null && !loading && !error && (
         <p className="meta" style={{ minHeight: '2rem' }} />
-      ) : (
+      )}
+      {groups !== null && (
         <>
           <h2>Related Articles</h2>
           {groups.map((group) => (
             <div className="related-articles" key={group.kind + ':' + group.term}>
               <h3>
-                <a href={hrefFor(group.kind, group.term)}>{group.term}</a>
+                <Link to={hrefFor(group.kind, group.term)}>{group.term}</Link>
               </h3>
               <div className="article-row">
                 {group.rows.map((row) => (

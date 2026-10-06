@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom'
 import Layout from '../components/Layout.jsx'
-import ArticleCard from '../components/ArticleCard.jsx'
+import ArticleRows from '../components/ArticleRows.jsx'
 import { useSiteQuery } from '../hooks/useSiteQuery.js'
 
 // /type/:name  /country/:name  /source/:name
@@ -10,7 +10,7 @@ import { useSiteQuery } from '../hooks/useSiteQuery.js'
 export default function Term({ kind }) {
   const { name } = useParams()
   const term = decodeURIComponent(name)
-  const { rows, loading, error } = useSiteQuery({
+  const query = useSiteQuery({
     table: 'article_terms',
     where: [
       ['kind', '=', kind],
@@ -31,11 +31,13 @@ export default function Term({ kind }) {
     <Layout>
       <div className="content list-view">
         <h1>{h1}</h1>
-        {!loading && <p className="meta">Total Articles: {rows.length}</p>}
-        {error && <p className="meta">Error: {String(error.message || error)}</p>}
-        {rows.map((row) => (
-          <ArticleCard key={row.slug} record={row} heading={2} />
-        ))}
+        <ArticleRows
+          query={query}
+          heading={2}
+          skeletonCount={8}
+          showCount
+          emptyText={'No articles found for "' + term + '".'}
+        />
       </div>
     </Layout>
   )

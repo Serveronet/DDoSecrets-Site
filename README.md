@@ -16,7 +16,7 @@ npm install
 
 ## Configuration
 
-Before building, edit `vite.config.js` and customize the `build.outDir` path so that it points to the `developed_sites` directory of your Serveronet installation. The path in the file is resolved relative to this project and must match where the Serveronet app stores its published sites (by default `../serveronet-app/storage/app/developed_sites/ddosecrets`).
+Before building, edit `vite.config.js` and customize the `build.outDir` path so that it points to the `developed_sites` directory of your Serveronet installation. The path in the file is resolved relative to this project and must match where the Serveronet app stores its published sites (by default `../serveronet/serveronet-app/storage/app/developed_sites/ddosecrets`).
 
 ## Commands
 
