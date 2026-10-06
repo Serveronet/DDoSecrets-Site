@@ -1,0 +1,55 @@
+{
+    "trusted_Site_Peers": [],
+    "prefered_Trackers": [],
+    "site_Admin_Signers": "",
+    "site_Requires_Authentication": false,
+    "single_Page_Application": true,
+    "allow_Visitor_Files": false,
+    "site_Has_Database": true,
+    "db_Schema_Versions": [
+        {
+            "version_number": "0",
+            "tableCreates": {
+                "articles": {
+                    "slug": { "datatype": "string", "nullable": true },
+                    "title": { "datatype": "string", "nullable": true },
+                    "short_description": { "datatype": "text", "nullable": true },
+                    "description": { "datatype": "text", "nullable": true },
+                    "author": { "datatype": "string", "nullable": true },
+                    "published_at": { "datatype": "string", "nullable": true },
+                    "published_date": { "datatype": "string", "nullable": true },
+                    "download_size": { "datatype": "bigInteger", "nullable": true },
+                    "is_external": { "datatype": "integer", "nullable": true, "default": 0 },
+                    "edited_rank": { "datatype": "integer", "nullable": true },
+                    "sources": { "datatype": "text", "nullable": true },
+                    "links": { "datatype": "text", "nullable": true },
+                    "categories": { "datatype": "text", "nullable": true },
+                    "countries": { "datatype": "text", "nullable": true }
+                },
+                "article_terms": {
+                    "slug": { "datatype": "string", "nullable": true },
+                    "kind": { "datatype": "string", "nullable": true },
+                    "term": { "datatype": "string", "nullable": true },
+                    "title": { "datatype": "string", "nullable": true },
+                    "short_description": { "datatype": "text", "nullable": true },
+                    "author": { "datatype": "string", "nullable": true },
+                    "published_at": { "datatype": "string", "nullable": true }
+                },
+                "categories": {
+                    "name": { "datatype": "string", "nullable": true },
+                    "kind": { "datatype": "string", "nullable": true },
+                    "article_count": { "datatype": "integer", "nullable": true }
+                }
+            },
+            "indexCreates": {
+                "articles": ["slug", "author", "published_at", "is_external", "edited_rank"],
+                "article_terms": ["slug", ["kind", "term"], ["kind", "term", "published_at"]],
+                "categories": [["kind", "article_count"]]
+            },
+            "uniqueIndexCreates": []
+        }
+    ],
+    "show_Adults_Only_Gate": false,
+    "list_Providers": [],
+    "inject_Feeling_Library": false
+}
