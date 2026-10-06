@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import Layout from '../components/Layout.jsx'
 import { querySiteDb } from '../api/siteApi.js'
 import { useSiteQuery } from '../hooks/useSiteQuery.js'
 import { looksLikeSql, parseSqlQuery, toQueryParameters } from '../lib/sqlish.js'
 import { parseJsonField } from '../lib/format.js'
+import { SkeletonSearchResults, Spinner, SlowHint } from '../components/Skeleton.jsx'
 
 const SQL_EXAMPLES = [
   "title like 'camera'",
@@ -30,6 +31,8 @@ export default function Search() {
 
   const sqlMode = params.mode ? params.mode === 'sql' : looksLikeSql(params.q)
   const [state, setState] = useState({ loading: false, rows: [], sql: '', error: null, qp: null })
+  const [nonce, setNonce] = useState(0)
+  const retrySearch = () => setNonce((n) => n + 1)
 
   const countries = useSiteQuery({ table: 'categories', where: [['kind', '=', 'country']], orderBy: ['name', 'asc'], limit: 1000 })
   const sources = useSiteQuery({ table: 'categories', where: [['kind', '=', 'source']], orderBy: ['name', 'asc'], limit: 1000 })
@@ -39,6 +42,7 @@ export default function Search() {
       setState({ loading: false, rows: [], sql: '', error: null, qp: null })
       return
     }
+    const controller = new AbortController()
     let cancelled = false
     setState((s) => ({ ...s, loading: true, error: null }))
     ;(async () => {
@@ -80,14 +84,17 @@ export default function Search() {
         if (termFilters.length) {
           const slugSets = await Promise.all(
             termFilters.map(([kind, term]) =>
-              querySiteDb({
-                table: 'article_terms',
-                where: [
-                  ['kind', '=', kind],
-                  ['term', '=', term],
-                ],
-                limit: 100000,
-              }).then(({ rows }) => new Set(rows.map((r) => r.slug)))
+              querySiteDb(
+                {
+                  table: 'article_terms',
+                  where: [
+                    ['kind', '=', kind],
+                    ['term', '=', term],
+                  ],
+                  limit: 100000,
+                },
+                { signal: controller.signal }
+              ).then(({ rows }) => new Set(rows.map((r) => r.slug)))
             )
           )
           let intersection = [...slugSets[0]]
@@ -105,16 +112,18 @@ export default function Search() {
           qp.whereIn = ['slug', intersection]
         }
 
-        const res = await querySiteDb(qp)
+        const res = await querySiteDb(qp, { signal: controller.signal })
         if (!cancelled) setState({ loading: false, rows: res.rows, sql: res.sql, error: null, qp })
       } catch (e) {
+        if (cancelled || (e && e.name === 'AbortError')) return
         if (!cancelled) setState({ loading: false, rows: [], sql: '', error: e, qp: null })
       }
     })()
     return () => {
       cancelled = true
+      controller.abort()
     }
-  }, [JSON.stringify(params), sqlMode])
+  }, [JSON.stringify(params), sqlMode, nonce])
 
   const typeCounts = useMemo(() => {
     const counts = {}
@@ -173,7 +182,10 @@ export default function Search() {
                       }}
                       aria-current={!params.type ? 'true' : undefined}
                     >
-                      Top results <span className="results-type-count">{state.rows.length}</span>
+                      Top results{' '}
+                      <span className="results-type-count">
+                        {state.loading && state.rows.length === 0 ? '…' : state.rows.length}
+                      </span>
                     </a>
                     {typeCounts.map(([name, count]) => (
                       <a
@@ -192,6 +204,11 @@ export default function Search() {
                   <label htmlFor="filter-country">Country</label>
                   <select id="filter-country" name="country" value={params.country} onChange={(e) => setParam({ country: e.target.value })}>
                     <option value="">Any country</option>
+                    {countries.loading && countries.rows.length === 0 && (
+                      <option value="" disabled>
+                        Loading countries…
+                      </option>
+                    )}
                     {countries.rows.map((c) => (
                       <option key={c.name} value={c.name}>
                         {c.name}
@@ -201,6 +218,11 @@ export default function Search() {
                   <label htmlFor="filter-source">Source</label>
                   <select id="filter-source" name="source" value={params.source} onChange={(e) => setParam({ source: e.target.value })}>
                     <option value="">Any source</option>
+                    {sources.loading && sources.rows.length === 0 && (
+                      <option value="" disabled>
+                        Loading sources…
+                      </option>
+                    )}
                     {sources.rows.map((c) => (
                       <option key={c.name} value={c.name}>
                         {c.name}
@@ -242,27 +264,43 @@ export default function Search() {
             <section className="results-list" aria-label="Publication results">
               <SearchSyntaxHelp active={!params.q || sqlMode} />
               {state.error && (
-                <p className="results-summary" role="status">
-                  {sqlMode ? 'SQL-like query error: ' : 'Query failed: '}
+                <p className="results-summary" role="alert">
+                  {sqlMode ? 'SQL-like query error: ' : ''}
                   {String(state.error.message || state.error)}{' '}
+                  <button type="button" className="search-syntax-example" onClick={retrySearch}>
+                    Try again
+                  </button>{' '}
                   {sqlMode && (
-                    <a
-                      href={'/search?query=' + encodeURIComponent(params.q) + '&mode=text'}
+                    <Link
+                      to={'/search?query=' + encodeURIComponent(params.q) + '&mode=text'}
                       className="drill-in"
                     >
                       Search as plain text instead
-                    </a>
+                    </Link>
                   )}
                 </p>
               )}
               {params.q && !state.error && (
                 <p className="results-summary" role="status">
                   {state.loading
-                    ? 'Searching…'
+                    ? state.rows.length > 0
+                      ? <>Searching (showing previous results)… <Spinner /></>
+                      : <>Searching… <Spinner /></>
                     : `${state.rows.length} publication${state.rows.length === 1 ? '' : 's'} matching ` +
                       (sqlMode ? <em>SQL query</em> : <em>{params.q}</em>) +
                       (state.rows.length ? ` · 1–${state.rows.length}` : '')}
                 </p>
+              )}
+              {state.loading && state.rows.length === 0 && (
+                <>
+                  {!params.q && <p className="results-summary" role="status">Searching… <Spinner /></p>}
+                  <SlowHint
+                    active={true}
+                    afterMs={10000}
+                    label="The site API is taking longer than usual. Suggestions can arrive faster from the search dialog…"
+                  />
+                  <SkeletonSearchResults count={5} />
+                </>
               )}
               {state.sql && !state.loading && (
                 <details className="results-sql">
@@ -282,6 +320,7 @@ export default function Search() {
 }
 
 function SearchSyntaxHelp({ active }) {
+  const navigate = useNavigate()
   return (
     <div className="search-syntax-help">
       <p className="meta">
@@ -289,7 +328,7 @@ function SearchSyntaxHelp({ active }) {
         <button
           type="button"
           className="search-syntax-example"
-          onClick={() => window.location.assign('/search?query=' + encodeURIComponent(SQL_EXAMPLES[2]))}
+          onClick={() => navigate('/search?query=' + encodeURIComponent(SQL_EXAMPLES[2]))}
         >
           <code>{SQL_EXAMPLES[2]}</code>
         </button>
@@ -327,7 +366,7 @@ function SearchResult({ row, term }) {
   return (
     <article className="publication-result">
       <h3>
-        <a href={'/article/' + row.slug} dangerouslySetInnerHTML={{ __html: highlight(row.title, term) }} />
+        <Link to={'/article/' + row.slug} dangerouslySetInnerHTML={{ __html: highlight(row.title, term) }} />
       </h3>
       <p className="result-metadata">
         <time dateTime={date}>{dateLabel}</time>

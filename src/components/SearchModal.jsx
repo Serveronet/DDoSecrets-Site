@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { querySiteDb } from '../api/siteApi.js'
+import { Skeleton } from './Skeleton.jsx'
 
 // Replica of the original search dialog markup (classes from app.css).
 export default function SearchModal({ open, onClose }) {
@@ -9,6 +10,7 @@ export default function SearchModal({ open, onClose }) {
   const [term, setTerm] = useState('')
   const [suggestions, setSuggestions] = useState([])
   const [selected, setSelected] = useState(null)
+  const [searching, setSearching] = useState(false)
 
   useEffect(() => {
     if (open && inputRef.current) {
@@ -16,6 +18,7 @@ export default function SearchModal({ open, onClose }) {
       setTerm('')
       setSuggestions([])
       setSelected(null)
+      setSearching(false)
       inputRef.current.focus()
     }
   }, [open])
@@ -24,24 +27,39 @@ export default function SearchModal({ open, onClose }) {
     const q = term.trim()
     if (!open || q.length < 2) {
       setSuggestions([])
+      setSearching(false)
       return
     }
     let cancelled = false
+    const controller = new AbortController()
+    setSearching(true)
     const t = setTimeout(() => {
-      querySiteDb({
-        table: 'articles',
-        orWhere: [
-          ['title', 'like', '%' + q + '%'],
-          ['short_description', 'like', '%' + q + '%'],
-        ],
-        orderBy: ['published_at', 'desc'],
-        limit: 8,
-      })
-        .then(({ rows }) => !cancelled && setSuggestions(rows))
-        .catch(() => !cancelled && setSuggestions([]))
+      querySiteDb(
+        {
+          table: 'articles',
+          orWhere: [
+            ['title', 'like', '%' + q + '%'],
+            ['short_description', 'like', '%' + q + '%'],
+          ],
+          orderBy: ['published_at', 'desc'],
+          limit: 8,
+        },
+        { signal: controller.signal }
+      )
+        .then(({ rows }) => {
+          if (cancelled) return
+          setSuggestions(rows)
+          setSearching(false)
+        })
+        .catch((e) => {
+          if (cancelled || (e && e.name === 'AbortError')) return
+          setSuggestions([])
+          setSearching(false)
+        })
     }, 250)
     return () => {
       cancelled = true
+      controller.abort()
       clearTimeout(t)
     }
   }, [open, term])
@@ -104,6 +122,18 @@ export default function SearchModal({ open, onClose }) {
               <h2 className="search-panel-heading">Suggested</h2>
               {term.trim().length < 2 ? (
                 <p className="meta" role="status">Type at least two characters to see suggestions.</p>
+              ) : searching ? (
+                <>
+                  <p className="meta" role="status">Searching…</p>
+                  <div aria-hidden="true">
+                    {Array.from({ length: 5 }, (_, i) => (
+                      <div className="search-shortcut" key={i}>
+                        <Skeleton className="skeleton-line pill" style={{ width: '1.125rem', height: '1.125rem', borderRadius: '50%', flex: '0 0 1.125rem' }} />
+                        <Skeleton className="skeleton-line" style={{ width: i % 2 ? '72%' : '58%' }} />
+                      </div>
+                    ))}
+                  </div>
+                </>
               ) : suggestions.length === 0 ? (
                 <p className="meta" role="status">No matching publications.</p>
               ) : (

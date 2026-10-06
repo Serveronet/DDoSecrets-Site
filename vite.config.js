@@ -10,7 +10,7 @@ export default defineConfig({
   build: {
     outDir: path.resolve(
       __dirname,
-      '../serveronet-app/storage/app/developed_sites/ddosecrets'
+      '../serveronet/serveronet-app/storage/app/developed_sites/ddosecrets'
     ),
     emptyOutDir: true,
     modulePreload: { polyfill: false },

@@ -1,5 +1,5 @@
 import Layout from '../components/Layout.jsx'
-import ArticleCard from '../components/ArticleCard.jsx'
+import ArticleRows from '../components/ArticleRows.jsx'
 import { useSiteQuery } from '../hooks/useSiteQuery.js'
 
 const VARIANTS = {
@@ -28,17 +28,13 @@ const VARIANTS = {
 
 export default function ArticleList({ variant }) {
   const def = VARIANTS[variant]
-  const { rows, loading, error } = useSiteQuery(def.query)
+  const query = useSiteQuery(def.query)
 
   return (
     <Layout>
       <div className="content list-view">
         <h1>{def.h1}</h1>
-        {!loading && <p className="meta">Total Articles: {rows.length}</p>}
-        {error && <p className="meta">Error: {String(error.message || error)}</p>}
-        {rows.map((row) => (
-          <ArticleCard key={row.slug} record={row} heading={2} />
-        ))}
+        <ArticleRows query={query} heading={2} skeletonCount={8} showCount />
       </div>
     </Layout>
   )

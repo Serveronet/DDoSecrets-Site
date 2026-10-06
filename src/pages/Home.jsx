@@ -1,5 +1,6 @@
-import ArticleCard from '../components/ArticleCard.jsx'
+import { Link } from 'react-router-dom'
 import Layout from '../components/Layout.jsx'
+import ArticleRows from '../components/ArticleRows.jsx'
 import Promo from '../components/Promo.jsx'
 import { useSiteQuery } from '../hooks/useSiteQuery.js'
 
@@ -23,32 +24,26 @@ export default function Home() {
       <div className="content home">
         <div className="column recent-articles">
           <h2>Recently Published</h2>
-          {recent.rows.map((row) => (
-            <ArticleCard key={row.slug} record={row} heading={3} />
-          ))}
-          <a className="btn" href="/all_articles/recent">
+          <ArticleRows query={recent} heading={3} skeletonCount={5} />
+          <Link className="btn" to="/all_articles/recent">
             View All
-          </a>
+          </Link>
         </div>
 
         <div className="column recently-edited-articles">
           <h2>Recently Edited</h2>
-          {edited.rows.map((row) => (
-            <ArticleCard key={row.slug} record={row} heading={3} />
-          ))}
-          <a className="btn" href="/all_articles/edited">
+          <ArticleRows query={edited} heading={3} skeletonCount={5} />
+          <Link className="btn" to="/all_articles/edited">
             View All
-          </a>
+          </Link>
         </div>
 
         <div className="column external-collaboration-articles">
           <h2>Collaborations</h2>
-          {collaborations.rows.map((row) => (
-            <ArticleCard key={row.slug} record={row} heading={3} />
-          ))}
-          <a className="btn" href="/all_articles/external">
+          <ArticleRows query={collaborations} heading={3} skeletonCount={5} />
+          <Link className="btn" to="/all_articles/external">
             View All
-          </a>
+          </Link>
         </div>
       </div>
     </Layout>

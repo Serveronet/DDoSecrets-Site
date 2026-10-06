@@ -1,14 +1,17 @@
 import { Link } from 'react-router-dom'
 import { useSiteQuery, useTableCount } from '../hooks/useSiteQuery.js'
+import { Skeleton, SkeletonCategoryStrip } from './Skeleton.jsx'
 
 // Top categories strip shown on article/list pages (original: .categories-list)
 export default function CategoryNav() {
-  const { rows } = useSiteQuery({
+  const { rows, loading } = useSiteQuery({
     table: 'categories',
     orderBy: ['article_count', 'desc'],
     limit: 5,
   })
   const totalCount = useTableCount('articles')
+
+  if (loading && rows.length === 0) return <SkeletonCategoryStrip />
 
   return (
     <ul className="categories-list">
@@ -21,7 +24,12 @@ export default function CategoryNav() {
       ))}
       <li>
         <Link to="/all_categories">
-          All <span className="category-count">{totalCount ?? ''}</span>
+          All{' '}
+          {totalCount === null ? (
+            <Skeleton className="skeleton-line pill" style={{ width: '3.25rem' }} />
+          ) : (
+            <span className="category-count">{totalCount}</span>
+          )}
         </Link>
       </li>
     </ul>

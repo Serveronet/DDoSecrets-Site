@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+
 export default function Footer() {
   return (
     <footer className="content">
@@ -38,10 +40,10 @@ export default function Footer() {
         <a href="https://tickets.ddosecrets.org/open.php">Request Data Access</a>
       </div>
       <div className="footblock">
-        <a href="/contact">Reach us by Email</a>
+        <Link to="/contact">Reach us by Email</Link>
       </div>
       <div className="footblock">
-        <a href="/submit">Submit Data</a>
+        <Link to="/submit">Submit Data</Link>
       </div>
       <br />
       <div className="footblock">
